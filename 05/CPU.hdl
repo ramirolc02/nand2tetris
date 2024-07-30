@@ -32,18 +32,20 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // STEPS: 
+    //  Instruction || Alu output 
     Mux16(a=instruction, b=aluOutput, sel=instruction[15], out=handledInstruction);
-    // if A-Instruction register 
+    // if A-Instruction register || C-Instruction && controlbit
     Not(in=instruction[15], out=aInstruction);
     And(a=instruction[5],b= instruction[15], out=cInstruction);
     Or(a=cInstruction,b=aInstruction,out=loadA);
+    // Load A-register
     ARegister(in=handledInstruction,load=loadA,out=addressValue);
     Mux16(a=addressValue,b=inM,sel=instruction[12],out=toAluFromA);
     And(a=instruction[15], b=instruction[4],out=loadD);
+    // Load D-register if controlBit == 1
     DRegister(in=aluOutput, load=loadD, out= toAluFromD); 
+    // Alu calc
     ALU(x=toAluFromD, y=toAluFromA, zx=instruction[11], nx=instruction[10] , zy=instruction[9] , ny=instruction[8] , f=instruction[7], no=instruction[6], out=aluOutput, zr=zr, ng=ng);
-    // Check this part 
     // Sets writeM
     And(a=instruction[15],b=instruction[3],out= writeM);
     // sets outM
@@ -51,22 +53,26 @@ CHIP CPU {
     // set addressM
     Mux16(a=addressValue, b=addressValue,sel=instruction[15],out[0..14]=addressM);
     
-    // Control PC 
-    DMux8Way(in=true,sel[2]=instruction[2],sel[1]=instruction[1],sel[0]=instruction[0] , a=null, b=jgt, c=jeq, d=jge, e=jlt, f=jne, g=jle, h=jmp);
-    DMux4Way(in=true, sel[0]=zr,sel[1]=ng, a=zeroes,b=zerone,c=onezero,d=ones );
-    And(a=null, b=zeroes, out=a);
-    And(a=jgt, b=zeroes, out=b);
-    And(a=jeq, b=zerone, out=c);
-    Or(a=zeroes, b=zerone, out=bothres);
-    And(a=jge, b=bothres, out=d);
-    And(a=jlt, b=onezero, out=e);
+    // Control PC (simplify)
+    // Jump(j1,j2,j3)
+    DMux8Way(in=true, sel=instruction[0..2], a=null, b=jgt, c=jeq, d=jge, e=jlt, f=jne, g=jle, h=jmp);
+    // Alu output (zr,ng)
+    DMux4Way(in=true, sel[0]=zr,sel[1]=ng, a=zeroes,b=zerone,c=onezero,d=ones);
+    // jump conditions
+    And(a=jgt, b=zeroes, out=b); // jgt: jump if out > 0
+    And(a=jeq, b=zerone, out=c); // jeq: jump if out == 0
+    Or(a=zeroes, b=zerone, out=bothres);   
+    And(a=jge, b=bothres, out=d);   // jge: jump if out >= 0
+    And(a=jlt, b=onezero, out=e);   // jlt: jump if out < 0
     Or(a=zeroes, b=onezero, out=bothres1);
-    And(a=jne, b=bothres1, out=f);
+    And(a=jne, b=bothres1, out=f); // jne: out != 0
     Or(a=onezero, b=zerone, out=bothres2);
-    And(a=jle, b=bothres2, out=g); // fix
-    And(a=jmp, b=true, out=h); // fix
+    And(a=jle, b=bothres2, out=g); // jle: out <= 0
+    And(a=jmp, b=true, out=h);  // jmp: unconditional jump
+    // Any jump condition activated ? 
     Or8Way(in[0]=false,in[1]=b,in[2]=c,in[3]=d,in[4]=e,in[5]=f,in[6]=g,in[7]=h,out=condition); 
     And(a=instruction[15], b=condition,out=conditionC);
+    // if condition == 0 then increment -> pc++
     Not(in=conditionC, out=increment);
-    PC(in=addressValue,load=conditionC,inc=increment, reset=reset,out[0..14]=pc );    
+    PC(in=addressValue,load=conditionC,inc=increment, reset=reset,out[0..14]=pc);    
 }

@@ -21,9 +21,22 @@
  * and Keyboard chip specifications given in the lectures and the book.
  */
 CHIP Memory {
-    IN in[16], load, address[15];
+    IN in[16], load, address[º15];
     OUT out[16];
 
     PARTS:
-	//// Replace this comment with your code.
+    // Two bits in the address input can be used to determine the target memory-part (RAM16K, Screen, Keyboard)
+    // The remaining bits of the address input are the address within the target memory-part
+    // Do the read/write, and output the memory-part[address] value to the out output. 
+
+    DMux4Way(in=true, sel=address[13..14], a=loadRAM1, b=loadRAM2, c=loadScreen, d=loadKeyboard);
+         
+    Or(a=loadRAM1, b=loadRAM2, out=loadRAM);
+    And(a=loadRAM, b=load, out=accessRam);
+    And(a=loadScreen, b=load , out=accessScreen);
+    RAM16K(in=in, load=accessRam, address=address[0..13], out=valueRam);
+    Screen(in=in, load=accessScreen, address=address[0..12], out=valueScreen);
+    Keyboard(out=valueKeyboard);
+
+    Mux4Way16(a=valueRam, b=valueRam, c=valueScreen, d=valueKeyboard, sel=address[13..14], out=out);
 }
